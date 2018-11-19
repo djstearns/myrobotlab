@@ -29,10 +29,28 @@ import static org.bytedeco.javacpp.opencv_core.IPL_DEPTH_8U;
 import static org.bytedeco.javacpp.opencv_core.cvCopy;
 import static org.bytedeco.javacpp.opencv_core.cvCreateImage;
 import static org.bytedeco.javacpp.opencv_core.cvGetSize;
+import static org.bytedeco.javacpp.opencv_imgcodecs.cvLoadImage;
+import static org.bytedeco.javacpp.opencv_imgcodecs.imread;
 
+import static org.bytedeco.javacpp.opencv_imgproc.*;
+import static org.bytedeco.javacpp.opencv_calib3d.*;
+import static org.bytedeco.javacpp.opencv_core.*;
+import static org.bytedeco.javacpp.opencv_features2d.*;
+import static org.bytedeco.javacpp.opencv_flann.*;
+import static org.bytedeco.javacpp.opencv_highgui.*;
+import static org.bytedeco.javacpp.opencv_imgcodecs.*;
+import static org.bytedeco.javacpp.opencv_ml.*;
+import static org.bytedeco.javacpp.opencv_objdetect.*;
+import static org.bytedeco.javacpp.opencv_photo.*;
+import static org.bytedeco.javacpp.opencv_shape.*;
+import static org.bytedeco.javacpp.opencv_stitching.*;
+import static org.bytedeco.javacpp.opencv_video.*;
+import static org.bytedeco.javacpp.opencv_videostab.*;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 
@@ -43,8 +61,12 @@ import org.bytedeco.javacpp.opencv_core.CvSize;
 import org.bytedeco.javacpp.opencv_core.IplImage;
 import org.bytedeco.javacpp.opencv_core.Mat;
 import org.bytedeco.javacv.CanvasFrame;
+import org.bytedeco.javacv.Frame;
 import org.myrobotlab.framework.Service;
+import org.myrobotlab.io.FileIO;
 import org.myrobotlab.logging.LoggerFactory;
+import org.myrobotlab.math.MathUtils;
+import org.myrobotlab.net.Http;
 import org.myrobotlab.service.OpenCV;
 import org.slf4j.Logger;
 
@@ -89,11 +111,15 @@ public abstract class OpenCVFilter implements Serializable {
   protected transient Boolean running;
 
   public OpenCVFilter() {
-    this.name = this.getClass().getSimpleName().substring("OpenCVFilter".length());
+    this(null);
   }
 
   public OpenCVFilter(String name) {
-    this.name = name;
+    if (name == null) {
+      this.name = this.getClass().getSimpleName().substring("OpenCVFilter".length());
+    } else {
+      this.name = name;
+    }
   }
 
   // TODO - refactor this back to single name constructor - the addFilter's new
@@ -188,10 +214,8 @@ public abstract class OpenCVFilter implements Serializable {
 
   // GET THE BUFFERED IMAGE FROM "MY" Iplimage !!!!
   /*
-  public BufferedImage getBufferedImage() {
-    return data.getDisplay();
-  }
-  */
+   * public BufferedImage getBufferedImage() { return data.getDisplay(); }
+   */
 
   // GET THE Graphics IMAGE FROM "MY" BufferedImage !!!!
   /*
@@ -210,16 +234,16 @@ public abstract class OpenCVFilter implements Serializable {
 
       // to make a decision about "source" you have to put either
       // "current display" cv.display
-      //  previous buffered image <== aggregate
-      //  "input" buffered image ?
+      // previous buffered image <== aggregate
+      // "input" buffered image ?
       BufferedImage input = null;
-      
+
       // displayExport displayMeta displayEnabled enabled
       if (displayExport) {
         // FIXME - be direct ! data.data.getBufferedImage(filter.name)
         input = data.getBufferedImage();
       } else {
-        // else cumulative display 
+        // else cumulative display
         input = data.getDisplay();
       }
 
@@ -260,27 +284,246 @@ public abstract class OpenCVFilter implements Serializable {
   public void postProcess(IplImage processed) {
     data.put(processed);
   }
-  
+
   public void saveToFile(String filename, IplImage image) {
     opencv.saveToFile(filename, image);
   }
-  
-  public Mat convertToMat(IplImage copy) {    
-    return opencv.convertToMat(copy);
+
+  public Frame toFrame(Mat image) {
+    return opencv.toFrame(image);
   }
-  
-  public void error(String format, Object...args) {
+
+  public Frame toFrame(IplImage image) {
+    return opencv.toFrame(image);
+  }
+
+  public Mat toMat(Frame image) {
+    return opencv.toMat(image);
+  }
+
+  public Mat toMat(IplImage image) {
+    return opencv.toMat(image);
+  }
+
+  public IplImage toImage(Frame image) {
+    return opencv.toImage(image);
+  }
+
+  public IplImage toImage(Mat image) {
+    return opencv.toImage(image);
+  }
+
+  public void error(String format, Object... args) {
     if (opencv == null) {
       log.error(String.format(format, args));
     } else {
       opencv.error(format, args);
-    }    
-  }
-  
-  public void show(final IplImage image, final String title) {
-    CanvasFrame canvas = new CanvasFrame(title, 1);
-    // canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-    canvas.showImage(opencv.convertToFrame(image));
+    }
   }
 
+  public void show(final IplImage image, final String title) {
+    CanvasFrame canvas = new CanvasFrame(title);
+    // canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+    canvas.showImage(opencv.toFrame(image));
+  }
+
+  public void show(final Mat image, final String title) {
+    CanvasFrame canvas = new CanvasFrame(title);
+    // canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+    canvas.showImage(opencv.toFrame(image));
+  }
+
+  public IplImage copy(final IplImage image) {
+    IplImage copy = cvCreateImage(cvGetSize(image), image.depth(), image.nChannels());
+    cvCopy(image, copy, null);
+    return copy;
+  }
+
+  static public String getImageFromUrl(String url) {
+    String ret = getCacheFile(url);
+    if (ret != null) {
+      return ret;
+    }
+    byte[] data = Http.get(url);
+    if (data == null) {
+      log.error("could not get {}", url);
+      return null;
+    }
+    return putCacheFile(url, data);
+  }
+
+  static public String getCacheFile(String url) {
+    String path = OpenCV.CACHE_DIR + File.separator + url.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
+    File f = new File(path);
+    if (f.exists()) {
+      return path;
+    }
+    return null;
+  }
+
+  static public String putCacheFile(String url, byte[] data) {
+    try {
+      String path = OpenCV.CACHE_DIR + File.separator + url.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
+      FileIO.toFile(path, data);
+      return path;
+    } catch (Exception e) {
+      log.error("putCacheFile threw", e);
+    }
+    return null;
+  }
+
+  static public Mat loadMat(String infile) {
+    String tryfile = infile;
+
+    if (tryfile.startsWith("http")) {
+      tryfile = getImageFromUrl(tryfile);
+    }
+
+    // absolute file exists ?
+    File f = new File(tryfile);
+    if (f.exists()) {
+      return read(tryfile); // load alpha
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    // service resources - when jar extracts ?
+    tryfile = "resource" + File.separator + infile;
+    f = new File(tryfile);
+    if (f.exists()) {
+      return read(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    // source/ide
+    // e.g. src\main\resources\resource\OpenCV
+    tryfile = "src" + File.separator + "main" + File.separator + "resources" + File.separator + "resource" + File.separator + OpenCV.class.getSimpleName() + File.separator
+        + infile;
+    f = new File(tryfile);
+    if (f.exists()) {
+      return read(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    // src\test\resources\OpenCV
+    tryfile = "src" + File.separator + "test" + File.separator + "resources" + File.separator + OpenCV.class.getSimpleName() + File.separator + infile;
+    f = new File(tryfile);
+    if (f.exists()) {
+      return read(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    log.error("could not load Mat {}", infile);
+    return null;
+  }
+  
+  static private Mat read(String filename) {
+    return imread(filename,  CV_LOAD_IMAGE_UNCHANGED);
+  }
+  
+  static private IplImage load(String filename) {
+    return cvLoadImage(filename,  CV_LOAD_IMAGE_UNCHANGED);
+  }
+
+  static public IplImage loadImage(String infile) {
+    String tryfile = infile;
+
+    if (tryfile.startsWith("http")) {
+      tryfile = getImageFromUrl(tryfile);
+    }
+    
+    // absolute file exists ?
+    File f = new File(tryfile);
+    if (f.exists()) {
+      return load(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    // service resources - when jar extracts ?
+    tryfile = "resource" + File.separator + infile;
+    f = new File(tryfile);
+    if (f.exists()) {
+      return load(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    // source/ide
+    // e.g. src\main\resources\resource\OpenCV
+    tryfile = "src" + File.separator + "main" + File.separator + "resources" + File.separator + "resource" + File.separator + OpenCV.class.getSimpleName() + File.separator
+        + infile;
+    f = new File(tryfile);
+    if (f.exists()) {
+      return load(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    // src\test\resources\OpenCV
+    tryfile = "src" + File.separator + "test" + File.separator + "resources" + File.separator + OpenCV.class.getSimpleName() + File.separator + infile;
+    f = new File(tryfile);
+    if (f.exists()) {
+      return load(tryfile);
+    } else {
+      log.warn("could load Mat {}", tryfile);
+    }
+
+    log.error("could not load Mat {}", infile);
+    return null;
+  }
+  
+  /*
+  public Mat overlayImage(final Mat background, final Mat foreground, 
+      Mat output, int posX , int posY)
+    {
+      background.copyTo(output);
+
+      // start at the row indicated by location, or at row 0 if location.y is negative.
+      for(int y = posY; y < background.rows; ++y)
+      {
+        int fY = y - location.y; // because of the translation
+
+        // we are done of we have processed all rows of the foreground image.
+        if(fY >= foreground.rows)
+          break;
+
+        // start at the column indicated by location, 
+
+        // or at column 0 if location.x is negative.
+        for(int x = std::max(location.x, 0); x < background.cols; ++x)
+        {
+          int fX = x - location.x; // because of the translation.
+
+          // we are done with this row if the column is outside of the foreground image.
+          if(fX >= foreground.cols)
+            break;
+
+          // determine the opacity of the foregrond pixel, using its fourth (alpha) channel.
+          double opacity =
+            ((double)foreground.data[fY * foreground.step + fX * foreground.channels() + 3])
+
+            / 255.;
+
+
+          // and now combine the background and foreground pixel, using the opacity, 
+
+          // but only if opacity > 0.
+          for(int c = 0; opacity > 0 && c < output.channels(); ++c)
+          {
+            unsigned char foregroundPx =
+              foreground.data[fY * foreground.step + fX * foreground.channels() + c];
+            unsigned char backgroundPx =
+              background.data[y * background.step + x * background.channels() + c];
+            output.data[y*output.step + output.channels()*x + c] =
+              backgroundPx * (1.-opacity) + foregroundPx * opacity;
+          }
+        }
+      }
+    */
+
+ 
 }

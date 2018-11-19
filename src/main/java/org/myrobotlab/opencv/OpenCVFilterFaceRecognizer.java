@@ -380,17 +380,7 @@ public class OpenCVFilterFaceRecognizer extends OpenCVFilter {
     cvDrawRect(image, cvPoint(rect.x(), rect.y()), cvPoint(rect.x() + rect.width(), rect.y() + rect.height()), color, 1, 1, 0);
   }
 
-  // FIXME - promote into OpenCVFilter
-  // helper method to show an image. (todo; convert it to a Mat )
-  public void show(final Mat imageMat, final String title) {
-    IplImage image = converterToIpl.convertToIplImage(converterToIpl.convert(imageMat));
-    final IplImage image1 = cvCreateImage(cvGetSize(image), IPL_DEPTH_8U, image.nChannels());
-    cvCopy(image, image1); // <-- WHY !?!?!?!
-    CanvasFrame canvas = new CanvasFrame(title, 1);
-    canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-    canvas.showImage(converterToIpl.convert(image1));
-  }
-
+ 
   @Override
   public IplImage process(IplImage image) throws InterruptedException {
     // convert to grayscale

@@ -438,7 +438,7 @@ public class OpenCV extends AbstractVideoSource {
 
   final transient OpenCVFrameConverter.ToIplImage grabberConverter = new OpenCVFrameConverter.ToIplImage();
   final transient Java2DFrameConverter jconverter = new Java2DFrameConverter();
-  final transient OpenCVFrameConverter.ToIplImage converter = new OpenCVFrameConverter.ToIplImage();
+  final transient OpenCVFrameConverter.ToIplImage converterToImage = new OpenCVFrameConverter.ToIplImage();
   final transient OpenCVFrameConverter.ToMat converterToMat = new OpenCVFrameConverter.ToMat();
 
   int cameraIndex = 0;
@@ -1237,7 +1237,7 @@ public class OpenCV extends AbstractVideoSource {
         outputFileStreams.put(recordingSource, recorder);
       }
       // TODO - add input, filter & display
-      outputFileStreams.get(recordingSource).record(converter.convert(data.getImage()));
+      outputFileStreams.get(recordingSource).record(converterToImage.convert(data.getImage()));
 
       if (closeOutputs) {
         FrameRecorder output = (FrameRecorder) outputFileStreams.get(recordingSource);
@@ -1577,14 +1577,30 @@ public class OpenCV extends AbstractVideoSource {
       log.error("saveToFile threw", e);
     }
   }
-
-  public Mat convertToMat(IplImage img) {
-    return converterToMat.convert(converterToMat.convert(img));
-  }
-
-  public Frame convertToFrame(IplImage image) {
-    return converter.convert(image);
+  
+  public Frame toFrame(Mat image) {
+    return converterToImage.convert(image);
   }
   
-
+  public Frame toFrame(IplImage image) {
+    return converterToImage.convert(image);
+  }
+  
+  public Mat toMat(Frame image) {
+    return converterToImage.convertToMat(frame);
+  }
+  
+  public Mat toMat(IplImage image) {
+    return converterToMat.convert(converterToMat.convert(image));
+  }
+  
+  public IplImage toImage(Frame image) {
+    return converterToImage.convertToIplImage(image);
+  }
+  
+  public IplImage toImage(Mat image) {
+    return converterToImage.convert(converterToMat.convert(image));
+  }
+  
+  
 }

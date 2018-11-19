@@ -41,10 +41,10 @@ public class DHLink implements Serializable {
 
   public transient final static Logger log = LoggerFactory.getLogger(DHLink.class);
   
-  private double velocity;
-  private int state = Servo.SERVO_EVENT_STOPPED;
+  private double velocity; // FIXME - is this set by IK being dp/dt ? .. it should be
+  private int state = Servo.SERVO_EVENT_STOPPED; // FIXME - no servo info
   private double targetPos;
-  public boolean hasServo = false;
+  public boolean hasServo = false; // FIXME - no servo info
   public double servoMin;
   public double servoMax;
   private double currentPos = 0.0;
@@ -170,7 +170,7 @@ public class DHLink implements Serializable {
         this.theta = angle;
       } else {
         // TODO: it's out of range!
-        log.info("Rotation out of range for link {}" , angle);
+        System.out.println("Rotation out of range for link " + angle);
       }
     } 
     if (DHLinkType.REVOLUTE_ALPHA.equals(type)) {
@@ -178,7 +178,7 @@ public class DHLink implements Serializable {
         alpha = angle;
       } else {
         // TODO: it's out of range!
-        log.info("Rotation out of range for link {}", angle);
+        System.out.println("Rotation out of range for link " + angle);
       }
     }
     else {
@@ -231,9 +231,7 @@ public class DHLink implements Serializable {
 
   @Override
   public String toString() {
-    // print in degrees
-    
-    return "DHLink [d=" + d + ", theta=" + MathUtils.radToDeg(theta) + ", r=" + r + ", alpha=" + MathUtils.radToDeg(alpha) + " min=" + MathUtils.radToDeg(min) + " max=" + MathUtils.radToDeg(max) + "]";
+    return "DHLink [d=" + d + ", theta=" + theta + ", r=" + r + ", alpha=" + alpha + " min=" + min + " max=" + max + "]";
   }
 
   public void incrRotate(double delta) {

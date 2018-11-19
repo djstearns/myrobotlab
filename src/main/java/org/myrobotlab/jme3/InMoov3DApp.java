@@ -7,13 +7,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.myrobotlab.framework.Service;
-import org.myrobotlab.jme3.interfaces.IntegratedMovementInterface;
 import org.myrobotlab.kinematics.CollisionItem;
 import org.myrobotlab.kinematics.Map3DPoint;
 import org.myrobotlab.kinematics.Point;
 import org.myrobotlab.math.Mapper;
 import org.myrobotlab.service.Servo;
-import org.myrobotlab.service.Servo.IKData;
+import org.myrobotlab.service.Servo.ServoEventData;
 import org.python.jline.internal.Log;
 
 import com.jme3.app.SimpleApplication;
@@ -45,7 +44,7 @@ import com.jme3.ui.Picture;
  */
 public class InMoov3DApp extends SimpleApplication implements IntegratedMovementInterface {
   private transient HashMap<String, Node> nodes = new HashMap<String, Node>();
-  private Queue<IKData> eventQueue = new ConcurrentLinkedQueue<IKData>();
+  private Queue<ServoEventData> eventQueue = new ConcurrentLinkedQueue<ServoEventData>();
   private transient HashMap<String, Node> servoToNode = new HashMap<String, Node>();
   private HashMap<String, Mapper> maps = new HashMap<String, Mapper>();
   private transient Service service = null;
@@ -74,9 +73,6 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
   protected Picture microOff;
   protected Picture battery[] = new Picture[101];
   protected Texture2D textureBat[] = new Texture2D[101];
-  private long startUpdateTs;
-  private long deltaMs;
-  private long sleepMs;
 
   public void setLeftArduinoConnected(boolean param) {
     leftArduinoConnected = param;
@@ -130,6 +126,19 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
 
   }
   // end monitor
+
+  public static void main(String[] args) {
+    InMoov3DApp app = new InMoov3DApp();
+    AppSettings settings = new AppSettings(true);
+    settings.setResolution(1024, 960);
+    // settings.setEmulateMouse(false);
+    // settings.setUseJoysticks(false);
+    settings.setUseInput(false);
+    app.setSettings(settings);
+    app.setShowSettings(false);
+    app.setPauseOnLostFocus(false);
+    app.start();
+  }
 
   @Override
   public void simpleInitApp() {
@@ -511,7 +520,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     node.setUserData("rotationMask_y", rotationMask.y);
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
-    angle = rotationMask.mult((float) Math.toRadians(0));
+    angle = rotationMask.mult((float) Math.toRadians(5));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("jaw", node);
     maps.put("jaw", new Mapper(0, 180,-10, 5));
@@ -609,14 +618,11 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
    *          : initial angle of rotation of the part (in radian)
    */
 
-  public void updatePosition(IKData event) {
+  public void updatePosition(ServoEventData event) {
     eventQueue.add(event);
   }
 
   public void simpleUpdate(float tpf) {
-    // start the clock on how much time we will take
-    startUpdateTs = System.currentTimeMillis();
-    
     if (updateCollisionItem) {
       for (Node node : collisionItems) {
         if (node.getUserData("collisionItem") != null) {
@@ -628,7 +634,7 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     }
 
     while (eventQueue.size() > 0) {
-      IKData event = eventQueue.remove();
+      ServoEventData event = eventQueue.remove();
       if (servoToNode.containsKey(event.name)) {
         Node node = servoToNode.get(event.name);
         Vector3f rotMask = new Vector3f((float) node.getUserData("rotationMask_x"), (float) node.getUserData("rotationMask_y"), (float) node.getUserData("rotationMask_z"));
@@ -718,17 +724,6 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
 
     }
 
-    // To achieve ~30 fps, the thread will need to sleep for 33ms otherwise the
-    // update thread races through this function without pause to generating 300+ fps.
-    // If this update takes deltaMs to process then we will subtract that from the initial 33ms,
-    // to make total time spent in this method as close to 33ms as possible.
-    
-    deltaMs = System.currentTimeMillis() - startUpdateTs;
-    sleepMs = 33 - deltaMs;
-    try {
-    Thread.sleep(sleepMs);
-    } catch(Exception e) {      
-    }
   }
 
   // FIXME - race condition, if this method is called before JME is fully initialized :(
