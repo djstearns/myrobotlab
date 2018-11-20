@@ -751,6 +751,13 @@ public abstract class Service extends MessageService implements Runnable, Serial
     } catch (InterruptedException e) {
     }
   }
+  
+  public static void sleep(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException e) {
+    }
+  }
 
   public final static String stackToString(final Throwable e) {
     StringWriter sw;

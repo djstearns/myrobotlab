@@ -1,16 +1,18 @@
 package org.myrobotlab.service;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import org.myrobotlab.codec.CodecUtils;
 import org.myrobotlab.framework.Instantiator;
 import org.myrobotlab.framework.Service;
 import org.myrobotlab.framework.ServiceType;
 import org.myrobotlab.framework.interfaces.Attachable;
 import org.myrobotlab.framework.interfaces.ServiceInterface;
+import org.myrobotlab.io.FileIO;
 import org.myrobotlab.jme3.Jme3App;
 import org.myrobotlab.jme3.Jme3Object;
 import org.myrobotlab.logging.Level;
@@ -20,6 +22,7 @@ import org.myrobotlab.math.Mapper;
 import org.myrobotlab.virtual.VirtualMotor;
 import org.slf4j.Logger;
 
+import com.google.gson.internal.LinkedTreeMap;
 import com.jme3.app.SimpleApplication;
 import com.jme3.asset.AssetManager;
 import com.jme3.asset.plugins.FileLocator;
@@ -53,6 +56,10 @@ public class JMonkeyEngine extends Service {
   ViewPort viewPort;
   Node rootNode;
   AppSettings settings;
+
+  long startUpdateTs;
+  long deltaMs;
+  long sleepMs;
 
   public void updatePosition(String name, Double angle) {
     Move move = new Move(name, angle);
@@ -93,7 +100,7 @@ public class JMonkeyEngine extends Service {
 
   protected Queue<Move> eventQueue = new ConcurrentLinkedQueue<Move>();
 
-  protected transient Map<String, Jme3Object> nodes = new HashMap<String, Jme3Object>();
+  protected transient Map<String, Jme3Object> nodes = new TreeMap<String, Jme3Object>();
 
   // TODO - make intermediate class - which has common interface to grab
   // shapes/boxes
@@ -153,14 +160,14 @@ public class JMonkeyEngine extends Service {
       app.setShowSettings(false);
       app.setPauseOnLostFocus(false);
       analogListener = new InputListener();
-      
+
       app.start();
       return app;
     }
     info("already started app %s", appType);
     return app;
   }
-  
+
   class InputListener implements AnalogListener {
 
     @Override
@@ -195,7 +202,7 @@ public class JMonkeyEngine extends Service {
         }
       }
     }
-    
+
   }
 
   @Override
@@ -237,6 +244,10 @@ public class JMonkeyEngine extends Service {
     meta.addDependency("org.jmonkeyengine", "jme3-bullet-native", jmeVersion);
     meta.addDependency("org.jmonkeyengine", "jme3-niftygui", jmeVersion);
     // jbullet ==> org="net.sf.sociaal" name="jME3-jbullet" rev="3.0.0.20130526"
+
+    // audio dependencies
+    meta.addDependency("de.jarnbjo", "j-ogg-all", "1.0.0");
+
     meta.addCategory("simulator");
     return meta;
   }
@@ -293,17 +304,18 @@ public class JMonkeyEngine extends Service {
       Servo jaw = (Servo) Runtime.getService("i01.head.jaw");
 
       // absolute jme movements
-      /** <pre>
-      jme.updatePosition("i01.head.jaw", 70.0);
-      jme.updatePosition("i01.head.jaw", 80.0);
-      jme.updatePosition("i01.head.jaw", 90.0);
-      jme.updatePosition("i01.head.jaw", 100.0);
-      
-      jme.updatePosition("i01.head.rothead", 90.0);
-      jme.updatePosition("i01.head.rothead", 70.0);
-      jme.updatePosition("i01.head.rothead", 85.0);
-      jme.updatePosition("i01.head.rothead", 130.0);
-      // head.moveTo(90, 90);
+      /**
+       * <pre>
+       * jme.updatePosition("i01.head.jaw", 70.0);
+       * jme.updatePosition("i01.head.jaw", 80.0);
+       * jme.updatePosition("i01.head.jaw", 90.0);
+       * jme.updatePosition("i01.head.jaw", 100.0);
+       * 
+       * jme.updatePosition("i01.head.rothead", 90.0);
+       * jme.updatePosition("i01.head.rothead", 70.0);
+       * jme.updatePosition("i01.head.rothead", 85.0);
+       * jme.updatePosition("i01.head.rothead", 130.0);
+       * // head.moveTo(90, 90);
        * </pre>
        */
 
@@ -376,30 +388,6 @@ public class JMonkeyEngine extends Service {
     return eventQueue;
   }
 
-  // FIXME - make work
-  public Jme3Object putNodex(String name, String parentName, String assetPath, Vector3f defaultAxis, Double currentAngle) {
-    Jme3Object o = new Jme3Object(name);
-    Node node = new Node("name");
-    Node parentNode = getNode(parentName);
-    if (parentNode != null) {
-      parentNode.attachChild(node);
-    }
-/*
-    Spatial spatial = assetManager.loadModel("Models/mtorso.j3o");
-    spatial.setName("mtorso");
-    node.attachChild(spatial);
-    node.setLocalTranslation(new Vector3f(0, 0, 0));
-    rotationMask = Vector3f.UNIT_Y.mult(-1);
-    node.setUserData("rotationMask_x", rotationMask.x);
-    node.setUserData("rotationMask_y", rotationMask.y);
-    node.setUserData("rotationMask_z", rotationMask.z);
-    node.setUserData("currentAngle", 0);
-    putNode("i01.torso.midStom", node, new Mapper(0, 180, 120, 60));
-*/
-    nodes.put(name, o);
-    return o;
-  }
-
   public void putNode(Node node) {
     putNode(node.getName(), node);
   }
@@ -415,7 +403,6 @@ public class JMonkeyEngine extends Service {
   public Jme3Object putNode(String name, Node node, Mapper mapper, Vector3f defaultRotationAxis) {
     return nodes.put(name, new Jme3Object(node, mapper, defaultRotationAxis));
   }
-  
 
   public Node getNode(String name) {
     Jme3Object o = getJme3Object(name);
@@ -433,7 +420,7 @@ public class JMonkeyEngine extends Service {
   }
 
   public void simpleInitApp() {
-    
+
     // wtf - assetManager == null - another race condition ?!?!?
     // after start - these are initialized as "default"
     assetManager = app.getAssetManager();
@@ -448,7 +435,7 @@ public class JMonkeyEngine extends Service {
     cam.setLocation(new Vector3f(0f, 0f, 900f));
 
     assetManager.registerLocator("InMoov/jm3/assets", FileLocator.class);
-    
+
     inputManager.addMapping("MouseClickL", new MouseButtonTrigger(MouseInput.BUTTON_LEFT));
     inputManager.addListener(analogListener, "MouseClickL");
     inputManager.addMapping("MouseClickR", new MouseButtonTrigger(MouseInput.BUTTON_RIGHT));
@@ -497,7 +484,7 @@ public class JMonkeyEngine extends Service {
     putNode("i01.torso.lowStom", "rootNode", "Models/ltorso.j3o", null, Vector3f.UNIT_X.mult(1), new Vector3f(0, 0, 0), 0);
 
     // FIXME - bind this to process Peers !!!! "default" "Peer" info in 3D form
-    
+
     putNode("i01.torso.midStom", "i01.torso.lowStom", "Models/mtorso.j3o", new Mapper(0, 180, 120, 60), Vector3f.UNIT_Y.mult(-1), new Vector3f(0, 0, 0), 0);
     putNode("i01.torso.topStom", "i01.torso.midStom", "Models/ttorso1.j3o", new Mapper(0, 180, 80, 100), Vector3f.UNIT_Z.mult(1), new Vector3f(0, 105, 10), 0);
     putNode("rightS", "i01.torso.topStom", null, null, Vector3f.UNIT_Z.mult(1), new Vector3f(0, 300, 0), 0);
@@ -506,13 +493,15 @@ public class JMonkeyEngine extends Service {
     putNode("i01.rightArm.omoplate", "rightS", "Models/Romoplate1.j3o", new Mapper(0, 180, 10, 70), Vector3f.UNIT_Z.mult(-1), new Vector3f(-143, 0, -17), 0);
 
     // angle = rotationMask.mult((float) Math.toRadians(-2));
-    // node.rotate(angle.x, angle.y, angle.z);  <------------ additional rotation ... 
+    // node.rotate(angle.x, angle.y, angle.z); <------------ additional rotation
+    // ...
     putNode("i01.rightArm.shoulder", "i01.rightArm.omoplate", "Models/Rshoulder1.j3o", new Mapper(0, 180, 0, 180), Vector3f.UNIT_X.mult(-1), new Vector3f(-23, -45, 0), 0);
     putNode("i01.rightArm.rotate", "i01.rightArm.shoulder", "Models/rotate1.j3o", new Mapper(0, 180, 40, 180), Vector3f.UNIT_Y.mult(-1), new Vector3f(-57, -55, 8), 0);
 
-    // angle = rotationMask.mult((float) Math.toRadians(30)); // additional rotate !
-    // node.rotate(angle.x, angle.y, angle.z);    
-    putNode("i01.rightArm.bicep", "i01.rightArm.rotate", "Models/Rbicep1.j3o", new Mapper(0, 180, 5, 60), Vector3f.UNIT_X.mult(-1), new Vector3f(5, -225, -32), 0);    
+    // angle = rotationMask.mult((float) Math.toRadians(30)); // additional
+    // rotate !
+    // node.rotate(angle.x, angle.y, angle.z);
+    putNode("i01.rightArm.bicep", "i01.rightArm.rotate", "Models/Rbicep1.j3o", new Mapper(0, 180, 5, 60), Vector3f.UNIT_X.mult(-1), new Vector3f(5, -225, -32), 0);
     putNode("leftS", "i01.torso.topStom", "Models/Lomoplate1.j3o", null, Vector3f.UNIT_Z.mult(1), new Vector3f(0, 300, 0), 0);
 
     // angle = rotationMask.mult((float) Math.toRadians(4));
@@ -522,14 +511,17 @@ public class JMonkeyEngine extends Service {
     putNode("i01.leftArm.rotate", "i01.leftArm.shoulder", "Models/rotate1.j3o", new Mapper(0, 180, 40, 180), Vector3f.UNIT_Y.mult(1), new Vector3f(65, -58, -3), 0);
 
     // angle = rotationMask.mult((float) Math.toRadians(27));
-    // node.rotate(angle.x, angle.y, angle.z); <-------------- additional rotate !!!
+    // node.rotate(angle.x, angle.y, angle.z); <-------------- additional rotate
+    // !!!
     putNode("i01.leftArm.bicep", "i01.leftArm.rotate", "Models/Lbicep.j3o", new Mapper(0, 180, 5, 60), Vector3f.UNIT_X.mult(-1), new Vector3f(-14, -223, -28), 0);
 
-    // angle = rotationMask.mult((float) Math.toRadians(-90)); <- Ha .. and an additional rotate
+    // angle = rotationMask.mult((float) Math.toRadians(-90)); <- Ha .. and an
+    // additional rotate
     // node.rotate(angle.x, angle.y, angle.z);
     putNode("i01.rightHand.wrist", "i01.rightArm.bicep", "Models/RWristFinger.j3o", new Mapper(0, 180, 130, 40), Vector3f.UNIT_X.mult(-1), new Vector3f(15, -290, -10), 0);
-    
-    // angle = rotationMask.mult((float) Math.toRadians(-90)); <--- HA .. and additional rotation !
+
+    // angle = rotationMask.mult((float) Math.toRadians(-90)); <--- HA .. and
+    // additional rotation !
     // node.rotate(angle.x, angle.y, angle.z);
     putNode("i01.leftHand.wrist", "i01.leftArm.bicep", "Models/LWristFinger.j3o", new Mapper(0, 180, 40, 130), Vector3f.UNIT_Y.mult(1), new Vector3f(0, -290, -20), 90);
     putNode("i01.head.neck", "i01.torso.topStom", "Models/neck.j3o", new Mapper(0, 180, 60, 110), Vector3f.UNIT_X.mult(-1), new Vector3f(0, 452.5f, -45), 0);
@@ -537,15 +529,23 @@ public class JMonkeyEngine extends Service {
     putNode("i01.head.rothead", "i01.head.rollNeck", "Models/head.j3o", new Mapper(0, 180, 150, 30), Vector3f.UNIT_Y.mult(-1), new Vector3f(0, 10, 20), 90);
     putNode("i01.head.jaw", "i01.head.rothead", "Models/jaw.j3o", new Mapper(0, 180, 0, 180), Vector3f.UNIT_X.mult(-1), new Vector3f(-5, 60, -50), 90);
 
+    save("inmoov-jme.json");
+    
+    // Vector3D vector = new Vector3D(7, 3, 120);
+    load("inmoov-jme.json");
+    
+    save("inmoov-jme1.json");
   }
 
   public void simpleUpdate(float tpf) {
-    
-    // FIXME calculate time taken ... if < 60 fps - sleep the difference ...
+
+    // start the clock on how much time we will take
+    startUpdateTs = System.currentTimeMillis();
+
     while (eventQueue.size() > 0) {
       Move move = null;
       try {
-        
+
         // TODO - support relative & absolute moves
         move = eventQueue.remove();
 
@@ -557,66 +557,54 @@ public class JMonkeyEngine extends Service {
           log.error("no Jme3Object named {}", name);
         }
         object.rotateDegrees(move.getAngle());
-        /**
-         * <pre>
-         * object.rotate(move);
-         * 
-         * Node node = getNode(targetName);
-         * // get the servo
-         * Vector3f rotMask = new Vector3f((float) node.getUserData("rotationMask_x"), (float) node.getUserData("rotationMask_y"), (float) node.getUserData("rotationMask_z"));
-         * 
-         * // we have a direct reference to the service that is moving, however,
-         * // it might be the case that we want to save
-         * // data as it came - and not use a direct reference to position, or
-         * // other volatile info - it can be saved then..
-         * double targetPos = servo.getTargetOutput();
-         * Float currentPos = node.getUserData("currentPos");// servo.getCurrentPosOutput();
-         *                                                   // LAME !!! FIXME
-         *                                                   // SERVO SHOULD
-         *                                                   // HAVE THIS DATA !
-         *                                                   // :(
-         * // I HAVE A REFERENCE TO SERVO .. I SHOULD GET ITS "CURRENT POSITION"
-         * // WTH ? :(
-         * 
-         * if (currentPos == null) {
-         *   currentPos = (float) servo.getRest();
-         * }
-         * 
-         * // float currentAngle = (float) node.getUserData("currentAngle");
-         * // Mapper map = o.getMapper();// maps.get(node.getName());
-         * // double currentAngle = servo.getCurrentPosOutput();
-         * 
-         * // float rotation = (float) ((map.calcOutput(targetPos)) * Math.PI /
-         * // 180 - currentAngle * Math.PI / 180);
-         * double rotation = (targetPos - currentPos) * 0.0174533; // Math.PI *
-         *                                                         // 2 / 360
-         * log.info("rotation {}", rotation);
-         * 
-         * log.info("jme {}.moveTo({}) - currentPos {} targetPos {} rotation {} ", move.getName(), targetPos, currentPos, targetPos, rotation);
-         * 
-         * Vector3f angle = rotMask.mult((float) rotation);
-         * // rotate take an "amount" to rotate from its current orientation
-         * // so movement must pass in "relative" delta of change
-         * node.rotate(angle.x, angle.y, angle.z);
-         * currentPos = (float) targetPos;
-         * node.setUserData("currentPos", currentPos.floatValue());
-         * 0
-         * // node.setUserData("currentAngle", (float)
-         * // (map.calcOutput(servo.getTargetOutput())));
-         * </pre>
-         */
+
       } catch (Exception e) {
         log.error("simpleUpdate failed for {} - targetName", move, e);
       }
     }
 
+    deltaMs = System.currentTimeMillis() - startUpdateTs;
+    sleepMs = 33 - deltaMs;
+    sleep(sleepMs);
   }
-  
+
   public Jme3Object putNode(String name, String parentName, String assetPath, Mapper mapper, Vector3f defaultRotation, Vector3f localTranslation, double currentAngle) {
     if (nodes.containsKey(name)) {
       log.error("there is already a node named {}", name);
     }
-    return nodes.put(name, new Jme3Object(this, name, parentName, assetPath, mapper, defaultRotation, localTranslation, currentAngle));    
+    return nodes.put(name, new Jme3Object(this, name, parentName, assetPath, mapper, defaultRotation, localTranslation, currentAngle));
+  }
+  
+
+  public boolean load(String jsonPath) {
+    try {
+      String json = FileIO.toString(jsonPath);
+      Map<String, Object> list = CodecUtils.fromJson(json, nodes.getClass());
+      for (String name : list.keySet()) {
+        String nodePart = CodecUtils.toJson(list.get(name));
+        Jme3Object node = CodecUtils.fromJson(nodePart, Jme3Object.class);
+        // get/create transient parts
+        // node.setService(Runtime.getService(name));
+        // node.setJme(this);
+        // putN
+        // nodes.put(node.getName(), node);
+      }
+      return true;
+    } catch (Exception e) {
+      error(e);
+    }
+    return false;
+  }
+
+  public boolean save(String jsonPath) {
+    try {
+      String json = CodecUtils.toJson(nodes);
+      FileIO.toFile(jsonPath, json.getBytes());
+      return true;
+    } catch (Exception e) {
+      error(e);
+    }
+    return false;
   }
 
   public Spatial loadModel(String assetPath) {

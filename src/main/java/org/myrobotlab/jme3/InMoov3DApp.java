@@ -73,6 +73,9 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
   protected Picture microOff;
   protected Picture battery[] = new Picture[101];
   protected Texture2D textureBat[] = new Texture2D[101];
+  private long startUpdateTs;
+  private long deltaMs;
+  private long sleepMs;
 
   public void setLeftArduinoConnected(boolean param) {
     leftArduinoConnected = param;
@@ -514,13 +517,13 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
     spatial = assetManager.loadModel("Models/jaw.j3o");
     spatial.setName("jaw");
     node.attachChild(spatial);
-    node.setLocalTranslation(new Vector3f(-5, 63f, -50));
+    node.setLocalTranslation(new Vector3f(-35, 63f, -50));
     rotationMask = Vector3f.UNIT_X.mult(1);
     node.setUserData("rotationMask_x", rotationMask.x);
     node.setUserData("rotationMask_y", rotationMask.y);
     node.setUserData("rotationMask_z", rotationMask.z);
     node.setUserData("currentAngle", 0);
-    angle = rotationMask.mult((float) Math.toRadians(5));
+    angle = rotationMask.mult((float) Math.toRadians(0));
     node.rotate(angle.x, angle.y, angle.z);
     nodes.put("jaw", node);
     maps.put("jaw", new Mapper(0, 180,-10, 5));
@@ -623,6 +626,9 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
   }
 
   public void simpleUpdate(float tpf) {
+    // start the clock on how much time we will take
+    startUpdateTs = System.currentTimeMillis();
+
     if (updateCollisionItem) {
       for (Node node : collisionItems) {
         if (node.getUserData("collisionItem") != null) {
@@ -724,6 +730,17 @@ public class InMoov3DApp extends SimpleApplication implements IntegratedMovement
 
     }
 
+    // To achieve ~30 fps, the thread will need to sleep for 33ms otherwise the
+    // update thread races through this function without pause to generating 300+ fps.
+    // If this update takes deltaMs to process then we will subtract that from the initial 33ms,
+    // to make total time spent in this method as close to 33ms as possible.
+    
+    deltaMs = System.currentTimeMillis() - startUpdateTs;
+    sleepMs = 33 - deltaMs;
+    try {
+    Thread.sleep(sleepMs);
+    } catch(Exception e) {      
+    }
   }
 
   // FIXME - race condition, if this method is called before JME is fully initialized :(

@@ -6,7 +6,7 @@ import org.myrobotlab.service.JMonkeyEngine;
 import com.jme3.app.SimpleApplication;
 
 /**
- * This is a base abstract class to implement common datastructures and methods
+ * This is a base abstract class to implement common data structures and methods
  * across "all" Jme3Apps
  * 
  * @author GroG

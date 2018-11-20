@@ -20,7 +20,7 @@ public class Jme3Object {
 
   transient JMonkeyEngine jme;
 
-  transient Service service;
+  transient ServiceInterface service;
 
   transient Node node;
 
@@ -28,12 +28,15 @@ public class Jme3Object {
 
   Mapper mapper;
 
-  transient Vector3f defaultRotationalMap;
+  Vector3f defaultRotationalMap;
+  Vector3f localTranslation;
 
   /**
-   * current angle of default rotation in degrees
+   * current angle of default rotation in degrees - 3? X,Y,Z ???
    */
   Double currentAngle;
+
+  String assetPath;
 
   public Jme3Object(String name) {
     this.name = name;
@@ -64,9 +67,13 @@ public class Jme3Object {
     this.jme = jme;
     this.name = name;
     this.defaultRotationalMap = defaultRotation;
+    this.localTranslation = localTranslation;
     this.currentAngle = currentAngle;
+    this.mapper = mapper;
+    this.assetPath = assetPath;
 
     node = new Node(name);
+    this.parentName = parentName;
     Node parentNode = jme.getNode(parentName);
     if (parentNode != null) {
       parentNode.attachChild(node);
@@ -120,5 +127,9 @@ public class Jme3Object {
     node.rotate(newAngle.x, newAngle.y, newAngle.z);
     currentAngle = localAngle;
     log.info("currentAngle {} newAngle {} deltaAngle {}", currentAngle, localAngle, deltaAngle);
+  }
+
+  public void setService(Service service) {
+    this.service = service;
   }
 }
