@@ -236,7 +236,7 @@ public class OpenCV extends AbstractVideoSource {
   transient final static public String PART = "part";
 
   public final static String POSSIBLE_FILTERS[] = { "AdaptiveThreshold", "AddMask", "Affine", "BoundingBoxToFile", "And", "Canny", "ColorTrack", "Copy", "CreateHistogram",
-      "Detector", "Dilate", "DL4J", "DL4JTransfer", "Erode", "FaceDetect", "FaceDetect2", "FaceRecognizer", "Fauvist", "FindContours", "Flip", "FloodFill", "FloorFinder",
+      "Detector", "Dilate", "DL4J", "DL4JTransfer", "Erode", "FaceDetect", "FaceDetect2", "FaceDetectDNN", "FaceRecognizer", "Fauvist", "FindContours", "Flip", "FloodFill", "FloorFinder",
       "FloorFinder2", "GoodFeaturesToTrack", "Gray", "HoughLines2", "Hsv", "Input", "InRange", "KinectDepth", "KinectDepthMask", "KinectInterleave", "KinectNavigate",
       "LKOpticalTrack", "Lloyd", "Mask", "MatchTemplate", "Mouse", "Not", "Output", "Overlay", "PyramidDown", "PyramidUp", "ResetImageRoi", "Resize", "SampleArray", "SampleImage",
       "SetImageROI", "SimpleBlobDetector", "Smooth", "Solr", "Split", "SURF", "Tesseract", "Threshold", "Tracker", "Transpose", "Undistort", "Yolo" };
@@ -265,7 +265,7 @@ public class OpenCV extends AbstractVideoSource {
   /**
    * convert BufferedImages to IplImages
    */
-  public IplImage BufferedImageToIplImage(BufferedImage src) {
+  public static IplImage BufferedImageToIplImage(BufferedImage src) {
     return grabberConverter.convert(jconverter.convert(src));
   }
 
@@ -350,7 +350,7 @@ public class OpenCV extends AbstractVideoSource {
     // meta.addPeer("streamer", "VideoStreamer", "video streaming service
     meta.sharePeer("streamer", "streamer", "VideoStreamer", "Shared Video Streamer");
 
-    String javaCvVersion = "1.4.2";
+    String javaCvVersion = "1.4.3";
     meta.addDependency("org.bytedeco", "javacv", javaCvVersion);
     meta.addDependency("org.bytedeco", "javacv-platform", javaCvVersion);
 
@@ -402,6 +402,9 @@ public class OpenCV extends AbstractVideoSource {
     // the haar / hog / lp classifier xml files for opencv from the MRL repo
     meta.addDependency("opencv", "opencv_classifiers", "0.0.1", "zip");
 
+    // the DNN Face Detection module
+    meta.addDependency("opencv", "opencv_facedetectdnn", "1.0.0", "zip");
+    
     // youtube downloader
     meta.addDependency("com.github.axet", "vget", "1.1.34");
 
@@ -423,7 +426,7 @@ public class OpenCV extends AbstractVideoSource {
   /**
    * converting IplImages to BufferedImages
    */
-  public static BufferedImage IplImageToBufferedImage(IplImage src) {
+  public static BufferedImage toBufferedImage(IplImage src) {
     OpenCVFrameConverter.ToIplImage grabberConverter = new OpenCVFrameConverter.ToIplImage();
     Java2DFrameConverter converter = new Java2DFrameConverter();
     Frame frame = grabberConverter.convert(src);
@@ -436,10 +439,11 @@ public class OpenCV extends AbstractVideoSource {
 
   transient BlockingQueue<Map<String, List<Classification>>> blockingClassification = new LinkedBlockingQueue<>();
 
-  final transient OpenCVFrameConverter.ToIplImage grabberConverter = new OpenCVFrameConverter.ToIplImage();
-  final transient Java2DFrameConverter jconverter = new Java2DFrameConverter();
-  final transient OpenCVFrameConverter.ToIplImage converterToImage = new OpenCVFrameConverter.ToIplImage();
-  final transient OpenCVFrameConverter.ToMat converterToMat = new OpenCVFrameConverter.ToMat();
+  // FIXME - I'm a little concerned these aren't threadsafe ...
+  final static transient OpenCVFrameConverter.ToIplImage grabberConverter = new OpenCVFrameConverter.ToIplImage();
+  final static transient Java2DFrameConverter jconverter = new Java2DFrameConverter();
+  final static transient OpenCVFrameConverter.ToIplImage converterToImage = new OpenCVFrameConverter.ToIplImage();
+  final static transient OpenCVFrameConverter.ToMat converterToMat = new OpenCVFrameConverter.ToMat();
 
   int cameraIndex = 0;
 
@@ -1569,7 +1573,7 @@ public class OpenCV extends AbstractVideoSource {
       if (i > 0) {
         ext = filename.substring(i + 1).toLowerCase();
       }
-      BufferedImage bi = IplImageToBufferedImage(image);
+      BufferedImage bi = toBufferedImage(image);
       FileOutputStream fos = new FileOutputStream(filename);
       ImageIO.write(bi, ext, new MemoryCacheImageOutputStream(fos));
       fos.close();
@@ -1581,8 +1585,12 @@ public class OpenCV extends AbstractVideoSource {
   public Frame toFrame(Mat image) {
     return converterToImage.convert(image);
   }
+
+  public Mat convertToMat(IplImage img) {
+    return converterToMat.convert(converterToMat.convert(img));
+  }
   
-  public Frame toFrame(IplImage image) {
+  public static Frame toFrame(IplImage image) {
     return converterToImage.convert(image);
   }
   

@@ -500,7 +500,7 @@ public class Deeplearning4j extends Service {
 
   public List<List<ClassPrediction>> classifyImageDarknet(IplImage iplImage) throws IOException {
     NativeImageLoader loader = new NativeImageLoader(224, 224, 3, new ColorConversionTransform(COLOR_BGR2RGB));
-    BufferedImage buffImg = OpenCV.IplImageToBufferedImage(iplImage);
+    BufferedImage buffImg = OpenCV.toBufferedImage(iplImage);
     INDArray image = loader.asMatrix(buffImg);
     DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
     scaler.transform(image);
@@ -520,7 +520,7 @@ public class Deeplearning4j extends Service {
     int gridHeight = 13;
 
     NativeImageLoader loader = new NativeImageLoader(416, 416, 3, new ColorConversionTransform(COLOR_BGR2RGB));
-    BufferedImage buffImg = OpenCV.IplImageToBufferedImage(iplImage);
+    BufferedImage buffImg = OpenCV.toBufferedImage(iplImage);
     INDArray image = loader.asMatrix(buffImg);
     DataNormalization scaler = new ImagePreProcessingScaler(0, 1);
     scaler.transform(image);
@@ -645,7 +645,7 @@ public class Deeplearning4j extends Service {
   public Map<String, Double> classifyImageCustom(IplImage iplImage, ComputationGraph model, List<String> labels) throws IOException {
     // this height width channel info is for VGG16 based models.
     NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
-    BufferedImage buffImg = OpenCV.IplImageToBufferedImage(iplImage);
+    BufferedImage buffImg = OpenCV.toBufferedImage(iplImage);
     INDArray image = loader.asMatrix(buffImg);
     DataNormalization scaler = new VGG16ImagePreProcessor();
     scaler.transform(image);
@@ -687,7 +687,7 @@ public class Deeplearning4j extends Service {
   
   public Map<String, Double> classifyImageVGG16(IplImage iplImage) throws IOException {
     NativeImageLoader loader = new NativeImageLoader(224, 224, 3);
-    BufferedImage buffImg = OpenCV.IplImageToBufferedImage(iplImage);
+    BufferedImage buffImg = OpenCV.toBufferedImage(iplImage);
     INDArray image = loader.asMatrix(buffImg);
     // TODO: we should consider the model as not only the model, but also the input transforms
     // for that model.
@@ -839,7 +839,7 @@ public class Deeplearning4j extends Service {
   
   static public ServiceType getMetaData() {
     
-    String dl4jVersion = "1.0.0-beta2";
+    String dl4jVersion = "1.0.0-beta3";
     
     boolean cudaEnabled = Boolean.valueOf(System.getProperty("gpu.enabled", "false"));
     boolean supportRasPi = false;
@@ -864,7 +864,7 @@ public class Deeplearning4j extends Service {
       // Use this if you want cuda 9.1 NVidia GPU support
       // TODO: figure out the cuDNN stuff.
       meta.addDependency("org.nd4j", "nd4j-cuda-9.2-platform", dl4jVersion);
-      meta.addDependency("org.nd4j", "deeplearning4j-cuda-9.2-platform", dl4jVersion);
+      meta.addDependency("org.nd4j", "deeplearning4j-cuda-9.2", dl4jVersion);
     }
     // The default build of 1.0.0-alpha does not support the raspi,  we built & host the following dependencies.
     // to support native cpu execution on the raspi.

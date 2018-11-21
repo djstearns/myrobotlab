@@ -101,7 +101,7 @@ public class OpenCVFilterKinectDepth extends OpenCVFilter {
       }
 
       cvPyrDown(kinectDepth, dst, filter);
-      invoke("publishDisplay", "kinectDepth", OpenCV.IplImageToBufferedImage(dst));
+      invoke("publishDisplay", "kinectDepth", OpenCV.toBufferedImage(dst));
     }
     // end fork
     

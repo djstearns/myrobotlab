@@ -523,7 +523,7 @@ public class OpenCVFilterFaceRecognizer extends OpenCVFilter {
     // a work around because imwrite doesn't support unicode in the filename.
     // so we'll convert the image to something like a byte array, and write it out ourselves.
     //  imwrite(filename, dFaceMat);
-    BufferedImage buffImg = OpenCV.IplImageToBufferedImage(converterToIpl.convertToIplImage(converterToIpl.convert(dFaceMat)));
+    BufferedImage buffImg = OpenCV.toBufferedImage(converterToIpl.convertToIplImage(converterToIpl.convert(dFaceMat)));
     ImageIO.write(buffImg,"png", new File(filename));
   }
 
